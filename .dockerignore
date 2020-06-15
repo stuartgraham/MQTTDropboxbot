@@ -1,0 +1,6 @@
+.env
+gitclean.bat
+app.log
+.gitignore
+Dockerfile
+README.md

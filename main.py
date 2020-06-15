@@ -6,11 +6,12 @@ import json
 import datetime
 import logging
 import dropbox
+import threading
 
 # .ENV FILE FOR TESTING
-# if os.path.exists('.env'):
-#     from dotenv import load_dotenv
-#     load_dotenv()
+#if os.path.exists('.env'):
+#    from dotenv import load_dotenv
+#    load_dotenv()
 
 # GLOBALS
 MQTT_BROKER = os.environ.get('MQTT_BROKER','')
@@ -69,6 +70,9 @@ def on_message(client, userdata, msg):
     image = message['image']
     logging.debug("json_image : {}".format(str(image)))
     post_to_dropbox(image, confidence, category)
+    uploader = threading.Thread(target=post_to_dropbox(image, confidence, category))
+    uploader.start()
+
 
 def main():
     logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(message)s')

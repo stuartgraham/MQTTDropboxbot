@@ -1,5 +1,6 @@
 # MQTT Dropbox
-Takes MQTT messages with jpg path and uploads to Dropbox and Slack
+Takes MQTT messages with image path and uploads them to Dropbox before sending acknowledgement MQTT message with
+URL to upload
 
 ### Environment variables
 Pass the following environment vairables to execution environment
@@ -9,7 +10,8 @@ Pass the following environment vairables to execution environment
 | `MQTT_PORT` | MQTT Broker port | `1883` |
 | `MQTT_SUB_TOPIC` | MQTT Topic to subscribe to | `test/messages` |
 | `INPUT_PATH` | Sub directory with input files | `input` |
-| `SLACK_TOKEN` | Slack API Token | `SoMeSeCrEt988766553` |
+| `DROPBOX_TOKEN` | Dropbox API Token | `SoMeSeCrEt988766553` |
+| `DROPBOX_PATH` | Future use | `/some/path` |
 
 ### Requirements
 ```sh
@@ -23,15 +25,15 @@ python3 .\main.py
 
 ### Docker Compose
 ```sh 
-mqttslackbot:
-    image: stuartgraham/mqttslackbot
-    container_name: mqttslackbot
+mqttdropboxbot:
+    image: stuartgraham/mqttdropboxbot
+    container_name: mqttdropboxbot
     environment:
         - INPUT_PATH=input
         - MQTT_BROKER=mqtt.test.local
         - MQTT_PORT=1883
-        - MQTT_PUB_TOPIC=
-        - MQTT_SUB_TOPIC=test/messages
+        - MQTT_PUB_TOPIC=test/moremessages
+        - MQTT_SUB_TOPIC=test/evenmoremessages
         - DROPBOX_TOKEN=SoMeSeCrEt988766553
     volumes:
         - input-storage:/app/input:ro

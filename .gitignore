@@ -2,3 +2,4 @@
 gitclean.bat
 app.log
 /input
+test-mqtt.py

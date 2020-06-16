@@ -7,6 +7,7 @@ import datetime
 import logging
 import dropbox
 import threading
+import queue
 
 # .ENV FILE FOR TESTING
 #if os.path.exists('.env'):
@@ -20,11 +21,11 @@ MQTT_SUB_TOPIC = os.environ.get('MQTT_SUB_TOPIC','')
 MQTT_PUB_TOPIC = os.environ.get('MQTT_PUB_TOPIC','')
 DROPBOX_TOKEN = os.environ.get('DROPBOX_TOKEN','')
 INPUT_PATH = os.environ.get('INPUT_PATH','input')
-DROPBOX_PATH = os.environ.get('DROPBOX_PATH','input')
+DROPBOX_PATH = os.environ.get('DROPBOX_PATH','/')
 
 BASE_DIR = os.getcwd()
 INPUT_PATH = os.path.join(BASE_DIR, INPUT_PATH)
-
+MESSAGE_QUEUE = queue.Queue()
 
 def post_to_dropbox(image, confidence, category):
     dbx = dropbox.Dropbox(DROPBOX_TOKEN)
@@ -32,9 +33,9 @@ def post_to_dropbox(image, confidence, category):
     try:
         os.chdir(INPUT_PATH)
         with open(image, 'rb') as f:
-            response = dbx.files_upload(f.read(), "/" + image, mute=True)
+            response = dbx.files_upload(f.read(), DROPBOX_PATH + image, mute=True)
             logging.debug("Response : {}".format(str(response)))
-            metadata = dbx.sharing_create_shared_link("/" + image)
+            metadata = dbx.sharing_create_shared_link(DROPBOX_PATH + image)
             print(metadata)
             push_mqtt_message({'url': metadata.url, 'category': category, 'confidence': float(confidence)})
 
@@ -42,7 +43,7 @@ def post_to_dropbox(image, confidence, category):
         print("Failed to upload {}, error : {}".format(image, err))
 
     os.chdir(BASE_DIR)
- 
+
 
 # PUB MQTT
 def push_mqtt_message(message):
@@ -56,25 +57,31 @@ def push_mqtt_message(message):
 # SUB MQTT
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
+    logging.debug("Listening to : {}".format(str(MQTT_SUB_TOPIC)))
     client.subscribe(MQTT_SUB_TOPIC)
 
 def on_message(client, userdata, msg):
     logging.info("Received : {} convert to json".format(str(msg.payload))) 
     message = msg.payload.decode('utf-8')
-    logging.debug("message : {}".format(str(message))) 
-    message = json.loads(message)
-    category = message['category']
-    logging.debug("json_category : {}".format(str(category))) 
-    confidence = message['confidence']
-    logging.debug("json_confidence : {}".format(str(confidence)))
-    image = message['image']
-    logging.debug("json_image : {}".format(str(image)))
-    post_to_dropbox(image, confidence, category)
-    uploader = threading.Thread(target=post_to_dropbox(image, confidence, category))
-    uploader.start()
+    MESSAGE_QUEUE.put(message)
 
+def queue_worker():
+    while True:
+        message = MESSAGE_QUEUE.get()
+        print(f'Working on {message}')
+        logging.debug("message : {}".format(str(message))) 
+        message = json.loads(message)
+        category = message['category']
+        logging.debug("json_category : {}".format(str(category))) 
+        confidence = message['confidence']
+        logging.debug("json_confidence : {}".format(str(confidence)))
+        image = message['image']
+        logging.debug("json_image : {}".format(str(image)))
+        post_to_dropbox(image, confidence, category)
+        print(f'Finished {message}')
+        MESSAGE_QUEUE.task_done()
 
-def main():
+def mqtt_subscriber():
     logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(message)s')
     logging.info("STARTING MQTT Dropbox bot")
     client = paho.Client("mqtt-dropbox-bot")
@@ -83,5 +90,9 @@ def main():
     client.connect(MQTT_BROKER, MQTT_PORT, 60)
     client.loop_forever()
 
+
+def main():
+    threading.Thread(target=mqtt_subscriber).start()
+    threading.Thread(target=queue_worker).start()
 # Main Exectution
 main()
